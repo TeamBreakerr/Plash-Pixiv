@@ -1,6 +1,11 @@
 (function() {
   // 通用：等待元素出现
   function waitForElement(selector, callback) {
+    if (document.querySelector(selector)) {
+      callback(document.querySelector(selector));
+      return;
+    }
+    
     const observer = new MutationObserver((mutations, obs) => {
       const element = document.querySelector(selector);
       if (element) {
@@ -11,7 +16,7 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // 简单计算图片平均色作为主色调（注意：这种方式仅作示例，实际可替换为更专业的算法）
+  // 简单计算图片平均色作为主色调
   function getDominantColorFromImage(img, callback) {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
@@ -47,11 +52,14 @@
     img.onload = function() {
       getDominantColorFromImage(img, function(dominantColor) {
         console.log('提取的主色调:', dominantColor);
+        // Set the body styles and image with inline styles
+        document.body.style.margin = '0px';
+        document.body.style.height = '100%';
+        document.body.style.backgroundColor = dominantColor;
         document.body.innerHTML = `
           <img src="${imgUrl}" 
                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: ${dominantColor};">
         `;
-        document.body.style.backgroundColor = dominantColor;
       });
     };
     img.onerror = function() {
@@ -74,44 +82,47 @@
     });
   }
 
+  // 从网页中提取所有页码链接的函数
+  function extractAllPageLinks() {
+    console.log('开始提取所有页码链接...');
+    const navElement = document.querySelector('nav.sc-xhhh7v-0');
+    if (navElement) {
+      console.log('找到导航元素');
+      const allLinks = navElement.getElementsByTagName('a');
+      const pageLinks = Array.from(allLinks).filter(link => {
+        return !link.hidden && 
+               link.href && 
+               link.href.includes('?p=') && 
+               !link.querySelector('svg');
+      });
+      console.log(`找到 ${pageLinks.length} 个页码链接`);
+      return pageLinks;
+    } 
+    console.log('未找到导航元素');
+    return [];
+  }
+
   // 收藏页逻辑：随机选择页码后再随机选择一张图片
   function processBookmarksPage() {
-    // 如果当前 URL 没有分页参数，则先随机选择一个页码
-    if (window.location.href.indexOf('?p=') === -1) {
-      waitForElement('nav.sc-xhhh7v-0', function(navElement) {
-        const pageElements = navElement.querySelectorAll('a, button');
-        let pages = [];
-        pageElements.forEach(el => {
-          const span = el.querySelector('span');
-          if (span) {
-            const pageNum = parseInt(span.textContent.trim(), 10);
-            if (!isNaN(pageNum)) {
-              let href = '';
-              if (el.tagName.toLowerCase() === 'a' && el.href) {
-                href = el.href;
-              } else {
-                // 对于 button 元素，构造 URL（默认基于当前页面地址）
-                href = window.location.href + '?p=' + pageNum;
-              }
-              pages.push({ page: pageNum, url: href });
-            }
-          }
-        });
-        if (pages.length > 0) {
-          const randomPage = pages[Math.floor(Math.random() * pages.length)];
-          if (window.location.href !== randomPage.url) {
-            console.log('随机选择的页码 URL:', randomPage.url);
-            window.location.href = randomPage.url;
-            return;
-          }
-        }
-        // 若已在随机页或无分页链接，则直接选择随机作品
-        selectRandomArtwork();
-      });
-    } else {
-      // 已有分页参数，直接选择随机作品
+    console.log('处理书签页面...');
+    if (window.location.href.includes('?p=')) {
+      console.log('当前URL已有页码参数，直接选择随机作品');
       selectRandomArtwork();
+      return;
     }
+    setTimeout(() => {
+      console.log('开始查找页码链接...');
+      const pageLinks = extractAllPageLinks();
+      if (pageLinks.length > 0) {
+        const randomIndex = Math.floor(Math.random() * pageLinks.length);
+        const selectedLink = pageLinks[randomIndex];
+        console.log(`随机选择了链接: ${selectedLink.href}`);
+        window.location.href = selectedLink.href;
+      } else {
+        console.log('未找到足够的页码链接，直接选择随机作品');
+        selectRandomArtwork();
+      }
+    }, 1000);
   }
 
   // 从当前页面随机选择一张作品图片
@@ -131,13 +142,18 @@
   }
 
   // 主逻辑：根据当前 URL 判断运行逻辑
-  if (window.location.href.includes('/users/10343884/bookmarks/artworks')) {
+  console.log('脚本开始执行，当前URL:', window.location.href);
+  
+  if (window.location.href.includes('/bookmarks')) {
+    console.log('检测到书签页面，执行书签页面处理逻辑');
     processBookmarksPage();
-  } else if (window.location.search.includes('intermediate=true')) {
-    processImagePage();
   } else if (window.location.href.includes('/artworks/')) {
+    console.log('检测到作品页面，执行作品页面处理逻辑');
     processArtworkPage();
+  } else if (window.location.search.includes('intermediate=true')) {
+    console.log('检测到图片页面，执行图片处理逻辑');
+    processImagePage();
   } else {
-    console.log('未识别的 Pixiv 页面。');
+    console.log('无法识别当前页面类型');
   }
 })();
